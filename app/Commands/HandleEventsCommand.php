@@ -3,53 +3,45 @@
 namespace App\Commands;
 
 use App\Application;
-
 use App\Database\SQLite;
-
 use App\EventSender\EventSender;
-
 use App\Models\Event;
-
-//use App\Models\EventDto;
+use App\Telegram\TelegramApiImpl;
 
 class HandleEventsCommand extends Command
-
 {
-
     protected Application $app;
 
     public function __construct(Application $app)
-
     {
-
         $this->app = $app;
-
     }
 
     public function run(array $options = []): void
-
     {
+        $eventModel = new Event(new SQLite($this->app));
+        $events = $eventModel->select();
 
-        $event = new Event(new SQLite($this->app));
+        $eventSender = new EventSender(new TelegramApiImpl($this->app->env('TELEGRAM_TOKEN')));
 
-        $events = $event->select();
+foreach ($events as $event) {
+    if ($this->shouldEventBeRan($event)) {
+        $receiverId = $event['receiver_id'] ?? null; 
+        $messageText = $event['text'] ?? null; 
 
-        $eventSender = new EventSender();
+        // Отладочная информация
+        echo "Полученные данные: receiver_id='{$receiverId}', messageText='{$messageText}'\n";
 
-        foreach ($events as $event) {
-
-            if ($this->shouldEventBeRan($event)) {
-
-                $eventSender->sendMessage($event->receiverId, $event->text);
-
-            }
-
+        if (!empty($receiverId) && is_string($messageText)) {
+            $eventSender->sendMessage($receiverId, $messageText);
+        } else {
+            echo "Ошибка: receiver_id не должен быть пустым. Получено: receiver_id='{$receiverId}', text='{$messageText}'\n";
         }
-
+    }
+}
     }
 
     private function shouldEventBeRan($event): bool
-
     {
         $currentMinute = date("i");
 
@@ -60,16 +52,16 @@ class HandleEventsCommand extends Command
         $currentMonth = date("m");
 
         $currentWeekday = date("w");
+//die(var_dump(123, $currentMinute, $currentHour, $currentDay, $currentMonth, $currentWeekday));
 
-        return ($event['minute'] === $currentMinute &&
+  return ((int)$event['minute'] === (int)$currentMinute &&
 
-            $event['hour'] === $currentHour &&
+            (int)$event['hour'] === (int)$currentHour &&
 
-            $event['day'] === $currentDay &&
+            (int)$event['day'] === (int)$currentDay &&
 
-            $event['month'] === $currentMonth &&
+            (int)$event['month'] === (int)$currentMonth &&
 
-            $event['weekDay'] === $currentWeekday);
+            (int)$event['day_of_week'] === (int)$currentWeekday);
     }
-
 }

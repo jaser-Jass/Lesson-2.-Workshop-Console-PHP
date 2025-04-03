@@ -41,7 +41,7 @@ foreach ($events as $event) {
 }
     }
 
-    private function shouldEventBeRan($event): bool
+    public function shouldEventBeRan($event): bool
     {
         $currentMinute = date("i");
 

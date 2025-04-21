@@ -6,6 +6,7 @@ use App\Application;
 use App\Database\SQLite;
 use App\EventSender\EventSender;
 use App\Models\Event;
+use App\Queue\RabbitMQ;  
 use App\Telegram\TelegramApiImpl;
 
 class HandleEventsCommand extends Command
@@ -19,49 +20,52 @@ class HandleEventsCommand extends Command
 
     public function run(array $options = []): void
     {
-        $eventModel = new Event(new SQLite($this->app));
-        $events = $eventModel->select();
+        $event = new Event(new SQLite($this->app));
 
-        $eventSender = new EventSender(new TelegramApiImpl($this->app->env('TELEGRAM_TOKEN')));
+        $events = $event->select();
 
-foreach ($events as $event) {
-    if ($this->shouldEventBeRan($event)) {
-        $receiverId = $event['receiver_id'] ?? null; 
-        $messageText = $event['text'] ?? null; 
+        $queue = new RabbitMQ('eventSender');  
 
-        // Отладочная информация
-        echo "Полученные данные: receiver_id='{$receiverId}', messageText='{$messageText}'\n";
+        $eventSender = new EventSender(new TelegramApiImpl($this->app->env('TELEGRAM_TOKEN')), $queue);
 
-        if (!empty($receiverId) && is_string($messageText)) {
-            $eventSender->sendMessage($receiverId, $messageText);
-        } else {
-            echo "Ошибка: receiver_id не должен быть пустым. Получено: receiver_id='{$receiverId}', text='{$messageText}'\n";
-        }
-    }
+        foreach ($events as $event) {
+
+             if ($this->shouldEventBeRan($event)) 
+            //if (true)
+            {
+                $receiverId = $event['receiver_id']; // Получаем receiver_id
+                $messageText = $event['text']; // Получаем текст сообщения
+
+                // Отладочная информация
+                echo "Полученные данные: receiver_id='{$receiverId}', messageText='{$messageText}'\n";
+
+             if (!empty($receiverId) && is_string($messageText)) {
+    $messageToSend = json_encode([
+        'receiver' => $receiverId,
+        'message' => $messageText
+    ]);
+    
+    $eventSender->sendMessage($messageToSend);
+} else {
+    echo "Ошибка: receiver_id не должен быть пустым. Получено: receiver_id='{$receiverId}', text='{$messageText}'\n";
 }
+            }
+        }
     }
 
     public function shouldEventBeRan($event): bool
     {
         $currentMinute = date("i");
-
         $currentHour = date("H");
-
         $currentDay = date("d");
-
         $currentMonth = date("m");
-
         $currentWeekday = date("w");
-//die(var_dump(123, $currentMinute, $currentHour, $currentDay, $currentMonth, $currentWeekday));
 
-  return ((int)$event['minute'] === (int)$currentMinute &&
-
-            (int)$event['hour'] === (int)$currentHour &&
-
-            (int)$event['day'] === (int)$currentDay &&
-
-            (int)$event['month'] === (int)$currentMonth &&
-
-            (int)$event['day_of_week'] === (int)$currentWeekday);
+        return ((int)$event['minute'] === (int)$currentMinute &&
+                (int)$event['hour'] === (int)$currentHour &&
+                (int)$event['day'] === (int)$currentDay &&
+                (int)$event['month'] === (int)$currentMonth &&
+                (int)$event['day_of_week'] === (int)$currentWeekday);
     }
 }
+

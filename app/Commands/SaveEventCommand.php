@@ -16,9 +16,7 @@ class SaveEventCommand extends Command
     public function __construct(Application $app)
 
     {
-
         $this->app = $app;
-
     }
     public function run(array $options  = []): void
 
